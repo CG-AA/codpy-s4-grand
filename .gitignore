@@ -1,0 +1,13 @@
+# Python envs / caches
+**/venv/
+**/.venv/
+**/__pycache__/
+*.pyc
+
+# PlatformIO build output
+**/.pio/
+
+# Judge runtime artifacts
+**/burn_matrix.json
+monitor_status.txt
+**/monitor_status.txt

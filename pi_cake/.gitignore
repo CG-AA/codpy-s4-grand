@@ -1,0 +1,5 @@
+__pycache__/
+**/.pio/
+venv/
+monitor_status.txt
+burn_matrix.json
