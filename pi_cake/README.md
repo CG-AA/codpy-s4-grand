@@ -23,14 +23,16 @@ Create and activate a virtual environment, then install the dependencies:
 python -m venv venv
 ```
 
-Activate it:
+Activate it. **On Windows, use CMD** — PowerShell's `Activate.ps1` is often blocked by
+"running scripts is disabled on this system" (open CMD in the folder: right-click → Open in
+Terminal → type `cmd`):
 
 ```bash
-# Windows PowerShell
-.\venv\Scripts\Activate.ps1
+# Windows CMD  (recommended)
+venv\Scripts\activate.bat
 
-# Windows CMD
-.\venv\Scripts\activate.bat
+# Windows PowerShell  (only if script execution is enabled)
+.\venv\Scripts\Activate.ps1
 
 # Linux / macOS
 source venv/bin/activate
@@ -117,14 +119,15 @@ Capybara Judge System 是一個 ESP32 評測環境。評測腳本會自動完成
 python -m venv venv
 ```
 
-啟用虛擬環境：
+啟用虛擬環境。**Windows 請用 CMD** — PowerShell 的 `Activate.ps1` 常被
+「running scripts is disabled on this system」擋掉（在資料夾按右鍵 → Open in Terminal → 輸入 `cmd`）：
 
 ```bash
-# Windows PowerShell
-.\venv\Scripts\Activate.ps1
+# Windows CMD（建議）
+venv\Scripts\activate.bat
 
-# Windows CMD
-.\venv\Scripts\activate.bat
+# Windows PowerShell（僅在指令碼執行已開啟時）
+.\venv\Scripts\Activate.ps1
 
 # Linux / macOS
 source venv/bin/activate
