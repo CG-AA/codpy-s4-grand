@@ -11,3 +11,10 @@
 **/burn_matrix.json
 monitor_status.txt
 **/monitor_status.txt
+
+# Doctor runtime
+doctor/logs/
+doctor/tmp/
+doctor/drivers/*
+!doctor/drivers/.gitkeep
+fractal/render.py.bak
