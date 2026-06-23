@@ -16,6 +16,23 @@
 // 1: 上下半分派 (Core 0 上, Core 1 下)
 // 2: 左右半分派 (Core 0 左, Core 1 右)
 // 3: 自己試試看！
+// 4: 靜態區塊分派 (透過 Task Queue)
+// 5: 區段交錯分派 (依據 CHUNK_SIZE 交錯)
+// 6: 對角線分派 (扭轉負載分布)
+// 7: Mariani-Silver 演算法分派 (結合 Queue 與遞迴分割)
+
+#define ASSIGN_MODE 7
+
+// 模式 4 的初始切割數量設定
+#define GRID_X 8
+#define GRID_Y 6
+
+// 模式 5 的區段大小設定
+#define CHUNK_SIZE 16 
+
+// 模式 7 (Mariani-Silver) 遞迴分割的最小寬高閾值
+#define MS_BLOCK_SIZE 64
+#define MS_THRESHOLD 8
 // ==========================================
 
 SemaphoreHandle_t serialMutex;
@@ -124,6 +141,105 @@ void render_segment(int y, int start_x, int end_x, int core_id) {
     }
 }
 
+// ==========================================
+// Mariani-Silver 演算法相關函數
+// ==========================================
+void ms_fill_rect(int start_x, int end_x, int start_y, int end_y, int core_id, int color) {
+    int len = end_x - start_x;
+    if (len <= 0) return;
+
+    for (int y = start_y; y < end_y; y++) {
+        // 計算所需的 RLE 區塊數量：每 255 個像素需要 1 組 (2 bytes)
+        int max_rle_pairs = (len / 255) + 1;
+        
+        // 分配記憶體：表頭(8 bytes) + 最大可能 RLE 載荷 + 結尾標記(2 bytes)
+        uint8_t buffer[8 + max_rle_pairs * 2 + 2];
+        int idx = 0;
+
+        // 1. 寫入 RLE 封包表頭
+        buffer[idx++] = 0xAA;
+        buffer[idx++] = 0xBB;
+        buffer[idx++] = (y >> 8) & 0xFF;
+        buffer[idx++] = y & 0xFF;
+        buffer[idx++] = (start_x >> 8) & 0xFF;
+        buffer[idx++] = start_x & 0xFF;
+        buffer[idx++] = (len >> 8) & 0xFF;
+        buffer[idx++] = len & 0xFF;
+        buffer[idx++] = core_id;
+
+        // 2. 寫入 RLE 載荷 (處理單次計數 > 255 的狀況)
+        int remaining = len;
+        while (remaining > 0) {
+            uint8_t chunk_size = (remaining > 255) ? 255 : remaining;
+            buffer[idx++] = chunk_size;
+            buffer[idx++] = color; // color 即為迭代次數 (out_iter)
+            remaining -= chunk_size;
+        }
+
+        // 3. 結尾標記
+        buffer[idx++] = 0x00;
+        buffer[idx++] = 0x00;
+
+        if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE) {
+            Serial.write(buffer, idx);
+            xSemaphoreGive(serialMutex);
+        }
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+}
+
+void ms_compute_rect(int start_x, int end_x, int start_y, int end_y, int core_id) {
+    for (int y = start_y; y < end_y; y++) {
+        render_segment(y, start_x, end_x, core_id);
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+}
+
+void mariani_silver(int start_x, int end_x, int start_y, int end_y, int core_id) {
+    int w = end_x - start_x;
+    int h = end_y - start_y;
+    
+    if (w <= MS_THRESHOLD || h <= MS_THRESHOLD) {
+        ms_compute_rect(start_x, end_x, start_y, end_y, core_id);
+        return;
+    }
+
+    int border_color = eval_pixel(start_x, start_y);
+    bool uniform = true;
+
+    // 檢查上下邊界
+    for (int x = start_x; x < end_x; x++) {
+        if (eval_pixel(x, start_y) != border_color || eval_pixel(x, end_y - 1) != border_color) {
+            uniform = false;
+            break;
+        }
+    }
+    
+    // 檢查左右邊界
+    if (uniform) {
+        for (int y = start_y + 1; y < end_y - 1; y++) {
+            if (eval_pixel(start_x, y) != border_color || eval_pixel(end_x - 1, y) != border_color) {
+                uniform = false;
+                break;
+            }
+        }
+    }
+
+    if (uniform) {
+        ms_fill_rect(start_x, end_x, start_y, end_y, core_id, border_color);
+    } else {
+        int mid_x = start_x + w / 2;
+        int mid_y = start_y + h / 2;
+        mariani_silver(start_x, mid_x, start_y, mid_y, core_id);
+        mariani_silver(mid_x, end_x, start_y, mid_y, core_id);
+        mariani_silver(start_x, mid_x, mid_y, end_y, core_id);
+        mariani_silver(mid_x, end_x, mid_y, end_y, core_id);
+    }
+}
+// ==========================================
+
 void fractalWorkerTask(void *pvParameters) {
     int core_id = (int)pvParameters;
 
@@ -149,8 +265,54 @@ void fractalWorkerTask(void *pvParameters) {
     }
     else if (ASSIGN_MODE == 3) {
         // **TODO
-        // code or paste your works! good luck!
+        // code or paste your 
     }
+    else if (current_assign_mode == 4) {
+        for (int y = core_id; y < HEIGHT; y += 2) {
+            render_segment(y, 0, WIDTH, core_id);
+            esp_task_wdt_reset(); 
+            vTaskDelay(pdMS_TO_TICKS(1)); 
+        }
+    }
+    else if (current_assign_mode == 5) {
+        BlockTask task;
+        while (xQueueReceive(taskQueue, &task, 0) == pdTRUE) {
+            ms_compute_rect(task.start_x, task.end_x, task.start_y, task.end_y, core_id);
+            vTaskDelay(pdMS_TO_TICKS(1)); 
+        }
+    }
+    else if (current_assign_mode == 6) {
+        for (int y = 0; y < HEIGHT; y++) {
+            if (((y / CHUNK_SIZE) % 2) == core_id) {
+                render_segment(y, 0, WIDTH, core_id);
+                esp_task_wdt_reset(); 
+            }
+            if (y % CHUNK_SIZE == 0) vTaskDelay(pdMS_TO_TICKS(1)); 
+        }
+    }
+    else if (current_assign_mode == 7) {
+        for (int y = 0; y < HEIGHT; y++) {
+            int boundary_x = y;  
+            if (core_id == 0) {
+                render_segment(y, 0, (boundary_x < WIDTH ? boundary_x : WIDTH), core_id);
+            } else {
+                int start = boundary_x < WIDTH ? boundary_x : WIDTH;
+                if (start < WIDTH) {
+                    render_segment(y, start, WIDTH, core_id);
+                }
+            }
+            esp_task_wdt_reset();
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
+    }
+    else if (ASSIGN_MODE == 8) {
+        BlockTask task;
+        while (xQueueReceive(taskQueue, &task, 0) == pdTRUE) {
+            mariani_silver(task.start_x, task.end_x, task.start_y, task.end_y, core_id);
+            vTaskDelay(pdMS_TO_TICKS(1)); 
+        }
+    }
+
 
     xEventGroupSetBits(renderEventGroup, (core_id == 0) ? CORE_0_BIT : CORE_1_BIT);
     vTaskDelete(NULL);
