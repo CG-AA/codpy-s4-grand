@@ -71,7 +71,7 @@ $script:FallbackPins = @{
 #  Helpers
 # ======================================================================
 
-function Write-Log {
+function Write-DoctorLog {
     param([string]$Message)
     if ($script:LogFile) {
         try {
@@ -84,7 +84,7 @@ function Write-Log {
 function Say {
     param([string]$Message, [string]$Color = 'Gray')
     Write-Host $Message -ForegroundColor $Color
-    Write-Log $Message
+    Write-DoctorLog $Message
 }
 
 function Invoke-Logged {
@@ -93,18 +93,18 @@ function Invoke-Logged {
         [Parameter(Mandatory)][string]$File,
         [string[]]$Arguments = @()
     )
-    Write-Log ("EXEC: {0} {1}" -f $File, ($Arguments -join ' '))
+    Write-DoctorLog ("EXEC: {0} {1}" -f $File, ($Arguments -join ' '))
     try {
         $output = & $File @Arguments 2>&1
         $code = $LASTEXITCODE
         foreach ($line in $output) {
             Write-Host ("    {0}" -f $line) -ForegroundColor DarkGray
-            Write-Log  ("    {0}" -f $line)
+            Write-DoctorLog  ("    {0}" -f $line)
         }
         if ($null -eq $code) { $code = 0 }
         return [pscustomobject]@{ Code = $code; Output = ($output -join "`n") }
     } catch {
-        Write-Log ("EXEC ERROR: {0}" -f $_)
+        Write-DoctorLog ("EXEC ERROR: {0}" -f $_)
         return [pscustomobject]@{ Code = -1; Output = "$_" }
     }
 }
@@ -116,7 +116,7 @@ function Add-UserPath {
     if (($userPath -split ';') -notcontains $Dir) {
         $newPath = if ($userPath) { "$userPath;$Dir" } else { $Dir }
         [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-        Write-Log "Added to user PATH: $Dir"
+        Write-DoctorLog "Added to user PATH: $Dir"
     }
     if (($env:Path -split ';') -notcontains $Dir) { $env:Path = "$env:Path;$Dir" }
 }
@@ -154,13 +154,13 @@ function Show-Result {
     $tag = "[{0,-4}]" -f $Result.Status
     if ($Compact) {
         Write-Host ("{0} {1}" -f $tag, $Result.Detail) -ForegroundColor $color
-        Write-Log  ("RECHECK {0} {1} :: {2}" -f $tag, $Result.Name, $Result.Detail)
+        Write-DoctorLog  ("RECHECK {0} {1} :: {2}" -f $tag, $Result.Name, $Result.Detail)
         return
     }
     Write-Host ''
     Write-Host ("{0} Stage {1}: {2}" -f $tag, $Result.Stage, $Result.Name) -ForegroundColor $color
     Write-Host ("       {0}" -f $Result.Detail) -ForegroundColor Gray
-    Write-Log  ("{0} Stage {1} {2} :: {3}" -f $tag, $Result.Stage, $Result.Name, $Result.Detail)
+    Write-DoctorLog  ("{0} Stage {1} {2} :: {3}" -f $tag, $Result.Stage, $Result.Name, $Result.Detail)
 }
 
 function Confirm-Fix {
@@ -180,9 +180,9 @@ function Invoke-Check {
     Show-Result $r
     if (-not $script:DiagnoseOnly -and $r.Fix -and ($r.Status -eq 'FAIL' -or $r.Status -eq 'WARN')) {
         if (Confirm-Fix $r) {
-            Write-Log ("FIX START: {0}" -f $r.FixDesc)
-            try { & $r.Fix } catch { Say ("  Fix error: {0}" -f $_) 'Red'; Write-Log "FIX ERROR: $_" }
-            Write-Log 'FIX END'
+            Write-DoctorLog ("FIX START: {0}" -f $r.FixDesc)
+            try { & $r.Fix } catch { Say ("  Fix error: {0}" -f $_) 'Red'; Write-DoctorLog "FIX ERROR: $_" }
+            Write-DoctorLog 'FIX END'
             $r = & $Test
             Write-Host '  re-check -> ' -NoNewline
             Show-Result $r -Compact
@@ -222,7 +222,7 @@ function Resolve-EspPorts {
                     FriendlyName = $d.FriendlyName
                     Status       = $d.Status
                     ProblemCode  = $code
-                    Problem      = ($d.Status -ne 'OK') -or ($code -ne $null -and $code -ne 0) -or (-not $com)
+                    Problem      = ($d.Status -ne 'OK') -or ($null -ne $code -and $code -ne 0) -or (-not $com)
                 }
             }
         }
@@ -477,14 +477,14 @@ function Test-Build {
     foreach ($a in 'pi_cake', 'fractal') {
         $dir = Join-Path $script:GrandDir $a
         $pio = Join-Path $dir 'venv\Scripts\platformio.exe'
-        if (-not (Test-Path $pio)) { $problems += "$a: no platformio.exe (fix Stage 4)"; continue }
+        if (-not (Test-Path $pio)) { $problems += "${a}: no platformio.exe (fix Stage 4)"; continue }
         $inis = Get-ChildItem -Path $dir -Recurse -Filter 'platformio.ini' -ErrorAction SilentlyContinue |
                 Where-Object { $_.FullName -notmatch '\\\.pio\\' }
         foreach ($ini in $inis) {
             $proj = Split-Path -Parent $ini.FullName
             Say "  Building $a :: $proj ..." 'Cyan'
             $r = Invoke-Logged $pio @('run', '-d', $proj)
-            if ($r.Code -ne 0) { $problems += "$a: build failed at $proj" }
+            if ($r.Code -ne 0) { $problems += "${a}: build failed at $proj" }
         }
     }
     if ($problems.Count) {
@@ -500,7 +500,7 @@ function Test-Build {
 function Initialize-Doctor {
     $script:WorkRoot = 'C:\dev'
     if (-not (Test-Path $script:WorkRoot)) {
-        try { New-Item -ItemType Directory -Path $script:WorkRoot -Force | Out-Null }
+        try { New-Item -ItemType Directory -Path $script:WorkRoot -Force -ErrorAction Stop | Out-Null }
         catch { $script:WorkRoot = Join-Path $env:PUBLIC 'codpy-dev' }
     }
     $script:TmpDir = Join-Path $script:SelfDir 'tmp'
