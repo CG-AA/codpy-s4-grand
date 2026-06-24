@@ -1,0 +1,2 @@
+# Drop offline CH340/CP210x driver .inf (+ .sys/.cat) files here before the workshop.
+# The doctor auto-detects them in Stage 5. This file just keeps the folder in git.

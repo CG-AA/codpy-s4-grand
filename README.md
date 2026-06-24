@@ -29,6 +29,15 @@ PowerShell 的 `Activate.ps1` 常被「**running scripts is disabled on this sys
 > 💡 Windows 10 沒有「Open in Terminal」？在檔案總管最上面的「網址列」直接打 `cmd` 按 Enter，
 > 就會在這個資料夾開一個 cmd 視窗，再從第 3 步開始即可。
 
+## 🩺 卡關了？跑 doctor（Troubleshooting）
+
+安裝好了卻跑不動、或不確定環境哪裡壞掉，就用備援診斷腳本：雙擊 [`doctor/doctor.bat`](./doctor)。
+它會從 `uv`、Python、git、venv、USB 驅動一路檢查到 ESP32 連線，偵測到問題會問你要不要自動修復。
+
+> Stuck after setup? Double-click [`doctor/doctor.bat`](./doctor). It checks everything from
+> `uv` install through ESP32 connectivity and offers to auto-fix each problem. Diagnose only:
+> `doctor\doctor.bat -DiagnoseOnly`. See [`doctor/README.md`](./doctor/README.md).
+
 ## 1. pi_cake（評分機作業）
 
 右鍵 `pi_cake` → Open in Terminal，然後：
