@@ -14,8 +14,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="ESP32 雙核碎形渲染器 (RLE 壓縮版)")
     parser.add_argument('-t', '--type', type=int, choices=[0, 1, 2], default=0,
                         help="碎形類型 (0:Mandelbrot, 1:Julia, 2:Burning Ship)")
-    parser.add_argument('-i', '--iter', type=int, default=1000,
-                        help="最大迭代次數 (預設: 1000)")
+    parser.add_argument('-i', '--iter', type=int, default=5000,
+                        help="最大迭代次數 (預設: 5000)")
     parser.add_argument('-cx', type=float, default=-0.123,
                         help="Julia 集合實部常數 (預設: -0.123)")
     parser.add_argument('-cy', type=float, default=0.745,
@@ -24,8 +24,8 @@ def parse_args():
                         help="碎形 z^n 的次方數 (預設: 2 建議範圍: 2~8)")
     parser.add_argument('-r', '--rect', type=float, nargs=4, default=None,
                         help="視窗範圍: min_x min_y max_x max_y (例如: -2.0 -1.2 1.0 1.2)")
-    parser.add_argument('-m', '--mode', type=int, choices=range(1, 8), default=7,
-                        help="任務切割模式 (1~7，預設: 7)")
+    parser.add_argument('-m', '--mode', type=int, choices=range(1, 9), default=1,
+                        help="任務切割模式 (1~3，預設: 1)")
     return parser.parse_args()
 
 PALETTE_LENGTH = 14
